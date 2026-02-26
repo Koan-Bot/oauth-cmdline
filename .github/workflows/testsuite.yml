@@ -9,28 +9,21 @@ on:
   pull_request:
 
 jobs:
-  ubuntu:
-    env:
-      PERL_USE_UNSAFE_INC: 0
-      AUTHOR_TESTING: 1
-      AUTOMATED_TESTING: 1
-      RELEASE_TESTING: 1
-
+  perl-versions:
     runs-on: ubuntu-latest
-
+    name: List Perl versions
+    outputs:
+      perl-versions: ${{ steps.perl-versions.outputs.perl-versions }}
     steps:
-      - uses: actions/checkout@v2
-      - run: perl -V
-      - name: install dependencies
-        uses: perl-actions/install-with-cpm@stable
+      - id: perl-versions
+        uses: perl-actions/perl-versions@v2
         with:
-          cpanfile: "cpanfile"
-      - name: prove tests
-        run: prove -vl t/*.t
+          since-perl: 5.16
+          with-devel: true
 
-  linux:
-    name: "linux ${{ matrix.perl-version }}"
-    needs: [ubuntu]
+  test:
+    name: "Perl ${{ matrix.perl-version }}"
+    needs: [perl-versions]
     env:
       PERL_USE_UNSAFE_INC: 0
       AUTHOR_TESTING: 1
@@ -42,29 +35,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        perl-version:
-          [
-            "5.34",
-            "5.32",
-            "5.30",
-            "5.28",
-            "5.26",
-            "5.24",
-            "5.22",
-            "5.20",
-            "5.18",
-            "5.16", # depends on Mojolicious which needs >= 5.016
-          ]
+        perl-version: ${{ fromJson(needs.perl-versions.outputs.perl-versions) }}
 
     container:
       image: perldocker/perl-tester:${{ matrix.perl-version }}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: perl -V
         run: perl -V
       - name: install dependencies
-        uses: perl-actions/install-with-cpm@stable
+        uses: perl-actions/install-with-cpm@v1
         with:
           sudo: false
           cpanfile: "cpanfile"
