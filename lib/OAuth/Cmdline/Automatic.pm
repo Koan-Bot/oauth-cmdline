@@ -3,9 +3,9 @@ package OAuth::Cmdline::Automatic;
 ###########################################
 use strict;
 use warnings;
-use MIME::Base64;
+use Moo;
 
-use base qw( OAuth::Cmdline );
+extends 'OAuth::Cmdline';
 
 # VERSION
 # ABSTRACT: Automatic.com-specific OAuth oddities

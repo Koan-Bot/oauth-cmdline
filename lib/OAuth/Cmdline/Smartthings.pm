@@ -3,7 +3,6 @@ package OAuth::Cmdline::Smartthings;
 ###########################################
 use strict;
 use warnings;
-use MIME::Base64;
 use Moo;
 
 extends "OAuth::Cmdline";

@@ -3,9 +3,9 @@ package OAuth::Cmdline::MicrosoftOnline;
 ###########################################
 use strict;
 use warnings;
-use MIME::Base64;
-use base qw( OAuth::Cmdline );
 use Moo;
+
+extends 'OAuth::Cmdline';
 
 # VERSION
 # ABSTRACT: Microsoft Online-specific settings for OAuth::Cmdline
@@ -20,8 +20,6 @@ sub site {
 ###########################################
     return "microsoft-online";
 }
-
-1;
 
 ###########################################
 sub tokens_get_additional_params {
@@ -46,6 +44,8 @@ sub update_refresh_token {
 
     return ( $cache, $data );
 }
+
+1;
 
 __END__
 

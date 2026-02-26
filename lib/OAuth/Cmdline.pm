@@ -6,11 +6,9 @@ use warnings;
 use URI;
 use YAML qw( DumpFile LoadFile );
 use HTTP::Request::Common;
-use URI;
 use LWP::UserAgent;
 use Log::Log4perl qw(:easy);
 use JSON qw( from_json );
-use MIME::Base64;
 use Moo;
 
 # VERSION
@@ -260,8 +258,8 @@ sub tokens_get {
     my $error;
     eval {
         my $json = $resp->content();
-        DEBUG "Received: [$json]",
-          my $data = from_json($json);
+        DEBUG "Received: [$json]";
+        my $data = from_json($json);
         $error = $data->{'error'};
     };
 
@@ -310,7 +308,7 @@ sub http_get {
 
     my $resp = $ua->get(
         $uri,
-        $self->authorization_headers, @$query
+        $self->authorization_headers,
     );
 
     if ( $resp->is_error ) {

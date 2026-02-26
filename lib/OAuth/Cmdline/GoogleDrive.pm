@@ -3,8 +3,9 @@ package OAuth::Cmdline::GoogleDrive;
 ###########################################
 use strict;
 use warnings;
-use MIME::Base64;
-use base qw( OAuth::Cmdline );
+use Moo;
+
+extends 'OAuth::Cmdline';
 
 # VERSION
 # ABSTRACT: GoogleDrive-specific settings for OAuth::Cmdline
