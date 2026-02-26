@@ -1,6 +1,6 @@
 ######################################################################
-# Test suite for OAuth::Cmdline
-# by Mike Schilli <cpan@perlmeister.com>
+# Live integration test for OAuth::Cmdline::Spotify
+# Requires LIVE_TESTS=1 and a pre-initialized ~/.spotify.yml
 ######################################################################
 use warnings;
 use strict;
@@ -8,40 +8,27 @@ use Test::More;
 use JSON qw( from_json );
 use OAuth::Cmdline::Spotify;
 
-BEGIN {
-    if ( exists $ENV{"LIVE_TESTS"} ) {
-        plan tests => 2;
-    }
-    else {
-        plan skip_all => "- only with LIVE_TESTS";
-    }
+SKIP: {
+    skip "Set LIVE_TESTS=1 to run Spotify integration tests", 2
+        unless $ENV{"LIVE_TESTS"};
+
+    my $spotify = OAuth::Cmdline::Spotify->new();
+
+    skip "Cache file " . $spotify->cache_file_path . " not found", 2
+        unless -f $spotify->cache_file_path;
+
+    my $user = $spotify->cache_read->{user};
+    skip "Add 'user:' field to " . $spotify->cache_file_path, 2
+        unless defined $user;
+
+    my $ua = LWP::UserAgent->new();
+    $ua->default_header( $spotify->authorization_headers );
+
+    my $resp = $ua->get("https://api.spotify.com/v1/users/$user/playlists");
+    ok $resp->is_success, "Fetching user playlists";
+
+    my $data = from_json( $resp->content() );
+    is ref $data->{items}, "ARRAY", "got an array of items";
 }
 
-my $spotify = OAuth::Cmdline::Spotify->new();
-
-if ( !-f $spotify->cache_file_path ) {
-    die "You need a fully initialized ",
-      $spotify->cache_file_path, " for testing.";
-}
-
-my $user = $spotify->cache_read->{user};
-
-if ( !defined $user ) {
-    die "Please add a 'user:' field with your user name to your ",
-      $spotify->cache_file_path, " for testing.";
-}
-
-my $ua = LWP::UserAgent->new();
-$ua->default_header( $spotify->authorization_headers );
-
-my $resp = $ua->get( "https://api.spotify.com/v1" . "/users/$user/playlists" );
-
-if ( $resp->is_error ) {
-    die "Fetching user playlists failed: ", $resp->message();
-}
-
-ok 1, "Fetching user playlists";
-
-my $data = from_json( $resp->content() );
-
-is ref $data->{items}, "ARRAY", "got an array of items";
+done_testing;

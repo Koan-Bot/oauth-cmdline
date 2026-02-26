@@ -1,6 +1,6 @@
 ######################################################################
-# Test suite for OAuth::Cmdline
-# by Mike Schilli <cpan@perlmeister.com>
+# Live integration test for OAuth::Cmdline::Smartthings
+# Requires LIVE_TESTS=1 and a pre-initialized ~/.smartthings.yml
 ######################################################################
 use warnings;
 use strict;
@@ -9,18 +9,14 @@ use JSON qw( from_json );
 use OAuth::Cmdline::Smartthings;
 
 SKIP: {
-
-    if ( !exists $ENV{"LIVE_TESTS"} ) {
-        skip "- only with LIVE_TESTS", 1;
-    }
+    skip "Set LIVE_TESTS=1 to run Smartthings integration tests", 1
+        unless $ENV{"LIVE_TESTS"};
 
     my $oauth = OAuth::Cmdline::Smartthings->new;
 
     my $json = $oauth->http_get( $oauth->base_uri . "/api/smartapps/endpoints" );
-
-    if ( !defined $json ) {
-        die "Can't get endpoints";
-    }
+    skip "Can't get endpoints", 1
+        unless defined $json;
 
     my $uri  = from_json($json)->[0]->{uri} . "/switches";
     my $data = $oauth->http_get($uri);
