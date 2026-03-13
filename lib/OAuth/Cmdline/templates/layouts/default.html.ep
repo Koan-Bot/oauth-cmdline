@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<html>
+<head><title>OAuth::Cmdline</title></head>
+<body>
+<h1>OAuth::Cmdline</h1>
+<%= content %>
+</body>
+</html>

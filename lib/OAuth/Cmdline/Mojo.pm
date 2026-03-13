@@ -76,7 +76,18 @@ sub callback {
         return;
     }
 
-    $self->app->{oauth}->tokens_collect($code);
+    eval { $self->app->{oauth}->tokens_collect($code); };
+
+    if ($@) {
+        my $err = $@;
+        $err =~ s/ at \S+ line \d+.*//s;    # strip file/line noise
+        $self->render(
+            text   => "Token exchange failed: $err",
+            status => 500,
+            layout => 'default'
+        );
+        return;
+    }
 
     $self->render(
         text   => "Tokens saved in " . $self->app->{oauth}->cache_file_path,
