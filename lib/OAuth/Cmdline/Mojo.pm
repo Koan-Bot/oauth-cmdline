@@ -55,7 +55,26 @@ sub callback {
 ###########################################
     my ($self) = @_;
 
+    if ( my $error = $self->param("error") ) {
+        my $desc = $self->param("error_description") // $error;
+        $self->render(
+            text   => "OAuth authorization failed: $desc",
+            status => 400,
+            layout => 'default'
+        );
+        return;
+    }
+
     my $code = $self->param("code");
+
+    if ( !defined $code || $code eq '' ) {
+        $self->render(
+            text   => "OAuth callback missing 'code' parameter",
+            status => 400,
+            layout => 'default'
+        );
+        return;
+    }
 
     $self->app->{oauth}->tokens_collect($code);
 

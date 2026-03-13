@@ -133,7 +133,17 @@ sub token_refresh {
     my $resp = $ua->request($req);
 
     if ( $resp->is_success() ) {
-        my $data = from_json( $resp->content() );
+        my $data;
+        eval { $data = from_json( $resp->content() ); };
+        if ($@) {
+            ERROR "Token refresh: failed to parse JSON response: $@";
+            return undef;
+        }
+
+        if ( !$data->{access_token} ) {
+            ERROR "Token refresh: response missing access_token";
+            return undef;
+        }
 
         DEBUG "Token refreshed, will expire in $data->{ expires_in } seconds";
 
@@ -287,12 +297,16 @@ sub tokens_collect {
         $expires_in
     ) = $self->tokens_get($code);
 
+    if ( !defined $access_token ) {
+        LOGDIE "tokens_collect: tokens_get() returned no access_token";
+    }
+
     my $cache = {
         access_token  => $access_token,
         refresh_token => $refresh_token,
         client_id     => $self->client_id,
         client_secret => $self->client_secret,
-        expires       => time() + $expires_in,
+        expires       => time() + ( $expires_in || 3600 ),
         token_uri     => $self->token_uri,
     };
 
