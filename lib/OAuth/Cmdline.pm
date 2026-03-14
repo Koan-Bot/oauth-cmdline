@@ -213,7 +213,19 @@ sub cache_read {
           "See GETTING STARTED in the docs for how to get started.";
     }
 
-    return LoadFile $self->cache_file_path;
+    my $cache;
+    eval { $cache = LoadFile $self->cache_file_path; };
+
+    if ($@) {
+        LOGDIE "Failed to read cache file ", $self->cache_file_path, ": $@";
+    }
+
+    if ( !defined $cache || ref $cache ne 'HASH' ) {
+        LOGDIE "Cache file ", $self->cache_file_path,
+          " is corrupted (expected YAML hash)";
+    }
+
+    return $cache;
 }
 
 ###########################################
@@ -223,9 +235,16 @@ sub cache_write {
 
     my $old_umask = umask 0177;
 
-    DumpFile $self->cache_file_path, $cache;
+    eval { DumpFile $self->cache_file_path, $cache; };
 
+    my $err = $@;
     umask $old_umask;
+
+    if ($err) {
+        LOGDIE "Failed to write cache file ", $self->cache_file_path,
+          ": $err";
+    }
+
     return 1;
 }
 
