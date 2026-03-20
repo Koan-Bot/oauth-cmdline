@@ -37,6 +37,7 @@ has ua_timeout => (
     is      => "rw",
     default => 30,
 );
+has csrf_state  => ( is => "rw" );
 
 ###########################################
 sub redirect_uri {
@@ -56,11 +57,41 @@ sub cache_file_path {
 }
 
 ###########################################
+sub generate_csrf_state {
+###########################################
+    my ($self) = @_;
+
+    # Generate a cryptographically random state token
+    # for CSRF protection per RFC 6749 Section 10.12
+    my $state;
+    if ( eval { require Crypt::URandom; 1 } ) {
+        $state = unpack( "H*", Crypt::URandom::urandom(16) );
+    }
+    else {
+        # Fallback: /dev/urandom on Unix
+        if ( open my $fh, '<:raw', '/dev/urandom' ) {
+            read $fh, my $bytes, 16;
+            close $fh;
+            $state = unpack( "H*", $bytes );
+        }
+        else {
+            # Last resort: time + PID + rand (weaker but functional)
+            $state = sprintf( "%x%x%x", time(), $$, rand( 2**32 ) );
+        }
+    }
+
+    $self->csrf_state($state);
+    return $state;
+}
+
+###########################################
 sub full_login_uri {
 ###########################################
     my ($self) = @_;
 
     my $full_login_uri = URI->new( $self->login_uri );
+
+    my $state = $self->generate_csrf_state();
 
     $full_login_uri->query_form(
         client_id     => $self->client_id(),
@@ -71,6 +102,7 @@ sub full_login_uri {
             : ()
         ),
         scope => $self->scope(),
+        state => $state,
         ( $self->access_type() ? ( access_type => $self->access_type() ) : () ),
     );
 

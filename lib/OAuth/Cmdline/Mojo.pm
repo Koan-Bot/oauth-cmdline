@@ -55,6 +55,24 @@ sub callback {
 ###########################################
     my ($self) = @_;
 
+    # Validate CSRF state parameter (RFC 6749 Section 10.12)
+    my $expected_state = $self->app->{oauth}->csrf_state();
+    my $received_state = $self->param("state");
+
+    if ( defined $expected_state ) {
+        if ( !defined $received_state
+            || $received_state ne $expected_state )
+        {
+            $self->render(
+                text   => "OAuth error: state parameter mismatch "
+                  . "(possible CSRF attack)",
+                status => 403,
+                layout => 'default'
+            );
+            return;
+        }
+    }
+
     if ( my $error = $self->param("error") ) {
         my $desc = $self->param("error_description") // $error;
         $self->render(
