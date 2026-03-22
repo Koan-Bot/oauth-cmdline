@@ -4,6 +4,7 @@ requires "HTTP::Request::Common" => "1";
 requires "JSON"                  => "1";
 requires "Log::Log4perl"         => "1";
 requires "LWP::UserAgent"        => "1";
+requires "Digest::SHA"           => "0";
 requires "MIME::Base64"          => "1";
 requires "Mojo::Base"            => "0";
 requires "Moo"                   => "1";

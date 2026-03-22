@@ -10,6 +10,8 @@ use HTTP::Request::Common;
 use LWP::UserAgent;
 use Log::Log4perl qw(:easy);
 use JSON qw( from_json );
+use MIME::Base64;
+use Digest::SHA qw( sha256 );
 use Moo;
 
 # VERSION
@@ -17,6 +19,7 @@ use Moo;
 
 has client_id     => ( is => "rw" );
 has client_secret => ( is => "rw" );
+has pkce          => ( is => "rw", default => 0 );
 has local_uri => (
     is      => "rw",
     default => "http://localhost:8082",
@@ -38,6 +41,8 @@ has ua_timeout => (
     default => 30,
 );
 has csrf_state  => ( is => "rw" );
+
+has _code_verifier => ( is => "rw" );
 
 ###########################################
 sub redirect_uri {
@@ -85,6 +90,52 @@ sub generate_csrf_state {
 }
 
 ###########################################
+sub _base64url_encode {
+###########################################
+    my ( $self, $data ) = @_;
+
+    my $encoded = encode_base64( $data, "" );
+    $encoded =~ tr{+/}{-_};
+    $encoded =~ s/=+$//;
+
+    return $encoded;
+}
+
+###########################################
+sub _generate_code_verifier {
+###########################################
+    my ($self) = @_;
+
+    my $bytes = _random_bytes(32);
+    return $self->_base64url_encode($bytes);
+}
+
+###########################################
+sub _random_bytes {
+###########################################
+    my ($n) = @_;
+
+    # Try /dev/urandom first (Unix/macOS)
+    if ( open my $fh, '<:raw', '/dev/urandom' ) {
+        my $buf;
+        read $fh, $buf, $n;
+        close $fh;
+        return $buf if defined $buf && length($buf) == $n;
+    }
+
+    # Fallback: use rand (less ideal but functional)
+    return join '', map { chr( int( rand(256) ) ) } 1 .. $n;
+}
+
+###########################################
+sub _generate_code_challenge {
+###########################################
+    my ( $self, $verifier ) = @_;
+
+    return $self->_base64url_encode( sha256($verifier) );
+}
+
+###########################################
 sub full_login_uri {
 ###########################################
     my ($self) = @_;
@@ -93,7 +144,7 @@ sub full_login_uri {
 
     my $state = $self->generate_csrf_state();
 
-    $full_login_uri->query_form(
+    my @params = (
         client_id     => $self->client_id(),
         response_type => "code",
         (
@@ -105,6 +156,20 @@ sub full_login_uri {
         state => $state,
         ( $self->access_type() ? ( access_type => $self->access_type() ) : () ),
     );
+
+    if ( $self->pkce ) {
+        my $verifier = $self->_generate_code_verifier();
+        $self->_code_verifier($verifier);
+
+        my $challenge = $self->_generate_code_challenge($verifier);
+        push @params,
+          code_challenge        => $challenge,
+          code_challenge_method => "S256";
+
+        DEBUG "PKCE enabled, code_challenge: $challenge";
+    }
+
+    $full_login_uri->query_form(@params);
 
     DEBUG "full login uri: $full_login_uri";
     return $full_login_uri;
@@ -293,18 +358,21 @@ sub tokens_get {
 ###########################################
     my ( $self, $code ) = @_;
 
-    my $req = &HTTP::Request::Common::POST(
-        $self->token_uri,
-        $self->tokens_get_additional_params(
-            [
-                code          => $code,
-                client_id     => $self->client_id,
-                client_secret => $self->client_secret,
-                redirect_uri  => $self->redirect_uri,
-                grant_type    => 'authorization_code',
-            ]
-        )
+    my @token_params = (
+        code          => $code,
+        client_id     => $self->client_id,
+        client_secret => $self->client_secret,
+        redirect_uri  => $self->redirect_uri,
+        grant_type    => 'authorization_code',
     );
+
+    if ( $self->pkce && $self->_code_verifier ) {
+        push @token_params, code_verifier => $self->_code_verifier;
+        DEBUG "PKCE: including code_verifier in token request";
+    }
+
+    my $req = &HTTP::Request::Common::POST( $self->token_uri,
+        $self->tokens_get_additional_params( \@token_params ) );
 
     my $ua   = LWP::UserAgent->new( timeout => $self->ua_timeout );
     my $resp = $ua->request($req);
@@ -314,11 +382,8 @@ sub tokens_get {
         DEBUG "Received: [$json]";
         my $data = from_json($json);
 
-        return (
-            $data->{access_token},
-            $data->{refresh_token},
-            $data->{expires_in}
-        );
+        return ( $data->{access_token}, $data->{refresh_token},
+            $data->{expires_in} );
     }
 
     my $error;
@@ -343,10 +408,8 @@ sub tokens_collect {
 ###########################################
     my ( $self, $code ) = @_;
 
-    my (
-        $access_token, $refresh_token,
-        $expires_in
-    ) = $self->tokens_get($code);
+    my ( $access_token, $refresh_token, $expires_in ) =
+      $self->tokens_get($code);
 
     if ( !defined $access_token ) {
         LOGDIE "tokens_collect: tokens_get() returned no access_token";
@@ -402,8 +465,12 @@ sub client_init_conf_check {
     }
 
     if (   !exists $conf->{client_id}
-        or !exists $conf->{client_secret} ) {
-        die "You need to register your application on " . "$url and add the client_id and " . "client_secret entries to " . $self->cache_file_path . "\n";
+        or !exists $conf->{client_secret} )
+    {
+        die "You need to register your application on "
+          . "$url and add the client_id and "
+          . "client_secret entries to "
+          . $self->cache_file_path . "\n";
     }
 
     $self->client_id( $conf->{client_id} );
@@ -556,3 +623,29 @@ Get/set the timeout in seconds for HTTP requests made by this module
 Set to 0 to disable the timeout.
 
 =back
+
+=head1 PKCE SUPPORT
+
+OAuth::Cmdline supports Proof Key for Code Exchange (PKCE, RFC 7636),
+which protects the authorization code flow against interception attacks.
+This is particularly important for command-line applications where the
+client secret may not be truly confidential.
+
+To enable PKCE, pass C<pkce =E<gt> 1> when constructing the object:
+
+    my $oauth = OAuth::Cmdline::GoogleDrive->new(
+        client_id     => "...",
+        client_secret => "...",
+        login_uri     => "...",
+        token_uri     => "...",
+        scope         => "...",
+        pkce          => 1,
+    );
+
+When PKCE is enabled, C<full_login_uri()> will automatically generate a
+cryptographic code verifier and include the corresponding S256 code challenge
+in the authorization URL. The code verifier is then sent with the token
+exchange request to prove possession of the original challenge.
+
+Many modern OAuth2 providers (Google, Microsoft, etc.) now recommend or
+require PKCE for public clients.
