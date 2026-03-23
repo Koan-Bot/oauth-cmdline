@@ -1,6 +1,7 @@
 ###########################################
 package OAuth::Cmdline;
 ###########################################
+use 5.016;
 use strict;
 use warnings;
 use URI;
@@ -32,6 +33,10 @@ has token_uri   => ( is => "rw" );
 has redir_uri   => ( is => "rw" );
 has access_type => ( is => "rw" );
 has raise_error => ( is => "rw" );
+has ua_timeout => (
+    is      => "rw",
+    default => 30,
+);
 
 ###########################################
 sub redirect_uri {
@@ -124,7 +129,7 @@ sub token_refresh {
         $self->token_refresh_authorization_header(),
     );
 
-    my $ua   = LWP::UserAgent->new();
+    my $ua   = LWP::UserAgent->new( timeout => $self->ua_timeout );
     my $resp = $ua->request($req);
 
     if ( $resp->is_success() ) {
@@ -240,7 +245,7 @@ sub tokens_get {
         )
     );
 
-    my $ua   = LWP::UserAgent->new();
+    my $ua   = LWP::UserAgent->new( timeout => $self->ua_timeout );
     my $resp = $ua->request($req);
 
     if ( $resp->is_success() ) {
@@ -299,7 +304,7 @@ sub http_get {
 ###########################################
     my ( $self, $url, $query ) = @_;
 
-    my $ua = LWP::UserAgent->new();
+    my $ua = LWP::UserAgent->new( timeout => $self->ua_timeout );
 
     my $uri = URI->new($url);
     $uri->query_form(@$query) if defined $query;
@@ -476,7 +481,13 @@ on the next call of C<authorization_headers()>.
 
 =item C<token_expire()>
 
-Force the expiration of the access token, so that the next request 
+Force the expiration of the access token, so that the next request
 obtains a new one.
+
+=item C<ua_timeout()>
+
+Get/set the timeout in seconds for HTTP requests made by this module
+(token refresh, token exchange, http_get). Defaults to 30 seconds.
+Set to 0 to disable the timeout.
 
 =back
