@@ -6,7 +6,6 @@ use warnings;
 use URI;
 use YAML qw( DumpFile LoadFile );
 use HTTP::Request::Common;
-use URI;
 use LWP::UserAgent;
 use Log::Log4perl qw(:easy);
 use JSON qw( from_json );

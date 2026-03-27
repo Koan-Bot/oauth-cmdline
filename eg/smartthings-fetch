@@ -14,16 +14,16 @@ Log::Log4perl->easy_init($DEBUG);
 # This is location-specific:
 #   https://graph-na02-useast1.api.smartthings.com (US)
 #   https://graph-eu01-euwest1.api.smartthings.com (UK)
-my $base_url = "https://graph-na02-useast1.api.smartthings.com";
+my $base_uri = "https://graph-na02-useast1.api.smartthings.com";
 
 my $oauth = OAuth::Cmdline::Smartthings->new(
-    base_url => $base_url,
+    base_uri => $base_uri,
     scope    => "app",
 );
 
-$oauth->client_init_conf_check($base_url);
+$oauth->client_init_conf_check($base_uri);
 
-my $json = $oauth->http_get("$base_url/api/smartapps/endpoints");
+my $json = $oauth->http_get("$base_uri/api/smartapps/endpoints");
 
 if ( !defined $json ) {
     die "Can't get endpoints";
